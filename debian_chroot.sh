@@ -1,11 +1,11 @@
 #!/bin/bash
 
-UBUNTU_EDITION="xenial"
-UBUNTU_ROOT="ubuntu_root"
-UBUNTU_PATH="/home/linaro/${UBUNTU_ROOT}"
-UBUNTU_MIRROR="http://mirror.yandex.ru/ubuntu"
+DEBIAN_EDITION="stable"
+DEBIAN_ROOT="debian_root"
+DEBIAN_PATH="/home/linaro/${DEBIAN_ROOT}"
+DEBIAN_MIRROR="http://mirror.yandex.ru/debian"
 
-PROCESS_COUNT_FILE="/dev/shm/${UBUNTU_ROOT}.lock"
+PROCESS_COUNT_FILE="/dev/shm/${DEBIAN_ROOT}.lock"
 
 function change_proc_count() {
 	local counter=0
@@ -40,36 +40,36 @@ function request_root() {
 }
 
 function clean_garbage() {
-	rm -rf "${UBUNTU_PATH}/tmp/*"
+	rm -rf "${DEBIAN_PATH}/tmp/*"
 }
 
 function mount_points() {
-	local UBUNTU_PROC="${UBUNTU_PATH}/proc"
-	local UBUNTU_SYS="${UBUNTU_PATH}/sys"
-	local UBUNTU_DEV="${UBUNTU_PATH}/dev"
+	local DEBIAN_PROC="${DEBIAN_PATH}/proc"
+	local DEBIAN_SYS="${DEBIAN_PATH}/sys"
+	local DEBIAN_DEV="${DEBIAN_PATH}/dev"
 	
 	if [ $1 -eq 1 ]; then
-		if ! mountpoint -q ${UBUNTU_PROC}; then
-			mount -t proc /proc ${UBUNTU_PROC}
+		if ! mountpoint -q ${DEBIAN_PROC}; then
+			mount -t proc /proc ${DEBIAN_PROC}
 		fi
-		if ! mountpoint -q ${UBUNTU_SYS}; then
-			mount --rbind /sys ${UBUNTU_SYS}
-			mount --make-rslave ${UBUNTU_SYS}
+		if ! mountpoint -q ${DEBIAN_SYS}; then
+			mount --rbind /sys ${DEBIAN_SYS}
+			mount --make-rslave ${DEBIAN_SYS}
 		fi
-		if ! mountpoint -q ${UBUNTU_DEV}; then
-			mount --rbind /dev ${UBUNTU_DEV}
-			mount --make-rslave ${UBUNTU_DEV}
+		if ! mountpoint -q ${DEBIAN_DEV}; then
+			mount --rbind /dev ${DEBIAN_DEV}
+			mount --make-rslave ${DEBIAN_DEV}
 		fi
 	else
-		umount -R ${UBUNTU_DEV}
-		umount -R ${UBUNTU_SYS}
-		umount ${UBUNTU_PROC}
+		umount -R ${DEBIAN_DEV}
+		umount -R ${DEBIAN_SYS}
+		umount ${DEBIAN_PROC}
 		clean_garbage
 	fi
 }
 
 function run_chrooted_process() {
-	chroot ${UBUNTU_PATH} /usr/bin/env -i \
+	chroot ${DEBIAN_PATH} /usr/bin/env -i \
 		HOME=/root \
 		TERM=$TERM \
 		PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games" \
@@ -78,7 +78,7 @@ function run_chrooted_process() {
 }
 
 function update_apt_list() {
-	local APT_PATH="${UBUNTU_PATH}/etc/apt"
+	local APT_PATH="${DEBIAN_PATH}/etc/apt"
 	if [ ! -d ${APT_PATH} ]; then
 		echo "Creating apt path"
 		mkdir -p ${APT_PATH}
@@ -87,49 +87,45 @@ function update_apt_list() {
 	echo "Create new apt list file"
 	local APT_LIST_PATH="${APT_PATH}/sources.list"
 
-	local BIN_TEMP="deb ${UBUNTU_MIRROR} ${UBUNTU_EDITION}"
-	local SRC_TEMP="deb-src ${UBUNTU_MIRROR} ${UBUNTU_EDITION}"
-	local REPOS="main restricted universe multiverse"
+	local BIN_TEMP="deb ${DEBIAN_MIRROR} ${DEBIAN_EDITION}"
+	local SRC_TEMP="deb-src ${DEBIAN_MIRROR} ${DEBIAN_EDITION}"
+	local REPOS="main contrib non-free"
 
 	echo "${BIN_TEMP} ${REPOS}" > $APT_LIST_PATH
 	echo "${BIN_TEMP}-updates ${REPOS}" >> $APT_LIST_PATH
-	echo "${BIN_TEMP}-backports ${REPOS}" >> $APT_LIST_PATH
-	echo "${BIN_TEMP}-security ${REPOS}" >> $APT_LIST_PATH
 	echo "${SRC_TEMP} ${REPOS}" >> $APT_LIST_PATH		
 	echo "${SRC_TEMP}-updates ${REPOS}" >> $APT_LIST_PATH
-	echo "${SRC_TEMP}-backports ${REPOS}" >> $APT_LIST_PATH
-	echo "${SRC_TEMP}-security ${REPOS}" >> $APT_LIST_PATH
 
 	run_chrooted_process "apt-get update && apt-get -y install dialog apt-utils && apt-get -y upgrade"
 }
 
 function install_locale() {
-        # run_chrooted_process "apt-get -y install locales"
-        sed -i 's/^# *\(en_US.UTF-8\)/\1/' ${DEBIAN_PATH}/etc/locale.gen
-        run_chrooted_process "locale-gen"
+	run_chrooted_process "apt-get -y install locales"
+	sed -i 's/^# *\(en_US.UTF-8\)/\1/' ${DEBIAN_PATH}/etc/locale.gen
+	run_chrooted_process "locale-gen"
 }
 
 function make_install() {
-	echo "Installing Ubuntu base system to chroot"
-	debootstrap --variant=buildd --arch amd64 ${UBUNTU_EDITION} ${UBUNTU_PATH} ${UBUNTU_MIRROR}
+	echo "Installing Debian base system to chroot"
+	debootstrap --variant=buildd --arch amd64 ${DEBIAN_EDITION} ${DEBIAN_PATH} ${DEBIAN_MIRROR}
 
 	echo "Configuring target system"
 	
 	echo "Coping hosts file"
-	cp -vp /etc/hosts ${UBUNTU_PATH}/etc/hosts
+	cp -vp /etc/hosts ${DEBIAN_PATH}/etc/hosts
 
 	echo "Setting chroot name"
-	echo "ubuntu" > ${UBUNTU_PATH}/etc/debian_chroot
+	echo "debian" > ${DEBIAN_PATH}/etc/debian_chroot
 
 	mount_points 1
-	
+
 	update_apt_list
 	install_locale
 
 	echo "Setup ccache"
-	echo "max_size = 50.0G" > ${UBUNTU_PATH}/etc/ccache.conf
-	echo "export PATH=\"/usr/lib/ccache/bin/:\$PATH\"" > ${UBUNTU_PATH}/etc/profile.d/ccache.sh
-	chmod +x ${UBUNTU_PATH}/etc/profile.d/ccache.sh
+	echo "max_size = 50.0G" > ${DEBIAN_PATH}/etc/ccache.conf
+	echo "export PATH=\"/usr/lib/ccache/bin/:\$PATH\"" > ${DEBIAN_PATH}/etc/profile.d/ccache.sh
+	chmod +x ${DEBIAN_PATH}/etc/profile.d/ccache.sh
 	run_chrooted_process "apt-get -y install ccache"
 }
 
@@ -137,8 +133,8 @@ request_root
 change_proc_count 1 > /dev/null
 
 # Make install if target root does not exists
-if [ ! -d ${UBUNTU_PATH} ]; then
-	mkdir ${UBUNTU_PATH}
+if [ ! -d ${DEBIAN_PATH} ]; then
+	mkdir ${DEBIAN_PATH}
 	make_install
 fi
 
