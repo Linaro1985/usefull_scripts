@@ -1,6 +1,6 @@
 #!/bin/bash
 
-UBUNTU_EDITION="xenial"
+UBUNTU_EDITION="bionic"
 UBUNTU_ROOT="ubuntu_root"
 UBUNTU_PATH="/home/linaro/${UBUNTU_ROOT}"
 UBUNTU_MIRROR="http://mirror.yandex.ru/ubuntu"
@@ -77,7 +77,7 @@ function run_chrooted_process() {
 		/bin/bash -c "source /etc/environment && source /etc/profile && source /etc/default/locale && export LANG && $1" --login +h
 }
 
-function update_apt_list() {
+function install_apt_list() {
 	local APT_PATH="${UBUNTU_PATH}/etc/apt"
 	if [ ! -d ${APT_PATH} ]; then
 		echo "Creating apt path"
@@ -100,18 +100,26 @@ function update_apt_list() {
 	echo "${SRC_TEMP}-backports ${REPOS}" >> $APT_LIST_PATH
 	echo "${SRC_TEMP}-security ${REPOS}" >> $APT_LIST_PATH
 
-	run_chrooted_process "apt-get update && apt-get -y install dialog apt-utils && apt-get -y upgrade"
+	run_chrooted_process "apt-get update && apt-get install -y dialog && apt-get -y upgrade"
 }
 
 function install_locale() {
         # run_chrooted_process "apt-get -y install locales"
-        sed -i 's/^# *\(en_US.UTF-8\)/\1/' ${DEBIAN_PATH}/etc/locale.gen
+        sed -i 's/^# *\(en_US.UTF-8\)/\1/' ${UBUNTU_PATH}/etc/locale.gen
         run_chrooted_process "locale-gen"
+}
+
+function install_ccache() {
+	echo "Setup ccache"
+	echo "max_size = 50.0G" > ${UBUNTU_PATH}/etc/ccache.conf
+	echo "export PATH=\"/usr/lib/ccache/bin/:\$PATH\"" > ${UBUNTU_PATH}/etc/profile.d/ccache.sh
+	chmod +x ${UBUNTU_PATH}/etc/profile.d/ccache.sh
+	run_chrooted_process "apt-get -y install ccache"
 }
 
 function make_install() {
 	echo "Installing Ubuntu base system to chroot"
-	debootstrap --variant=buildd --arch amd64 ${UBUNTU_EDITION} ${UBUNTU_PATH} ${UBUNTU_MIRROR}
+	debootstrap --include=apt-utils,locales --variant=buildd --arch amd64 ${UBUNTU_EDITION} ${UBUNTU_PATH} ${UBUNTU_MIRROR}
 
 	echo "Configuring target system"
 	
@@ -123,14 +131,9 @@ function make_install() {
 
 	mount_points 1
 	
-	update_apt_list
+	install_apt_list
 	install_locale
-
-	echo "Setup ccache"
-	echo "max_size = 50.0G" > ${UBUNTU_PATH}/etc/ccache.conf
-	echo "export PATH=\"/usr/lib/ccache/bin/:\$PATH\"" > ${UBUNTU_PATH}/etc/profile.d/ccache.sh
-	chmod +x ${UBUNTU_PATH}/etc/profile.d/ccache.sh
-	run_chrooted_process "apt-get -y install ccache"
+	install_ccache
 }
 
 request_root
