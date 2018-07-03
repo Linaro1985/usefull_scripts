@@ -74,7 +74,7 @@ function run_chrooted_process() {
 		TERM=$TERM \
 		PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games" \
 		PS1='\u:\w\$ ' \
-		/bin/bash -c "source /etc/environment && source /etc/profile && $1" --login +h
+		/bin/bash -c "source /etc/environment && source /etc/profile && source /etc/default/locale && export LANG && $1" --login +h
 }
 
 function update_apt_list() {
